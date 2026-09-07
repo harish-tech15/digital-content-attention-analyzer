@@ -1,19 +1,8 @@
-
 import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
-
-# ============================================================
-# LOAD MODEL AND DATA
-# ============================================================
-
-model = joblib.load("random_forest_model.pkl")
-model_columns = joblib.load("model_columns.pkl")
-kmeans = joblib.load("kmeans_model.pkl")
-cluster_scaler = joblib.load("cluster_scaler.pkl")
-
-df = pd.read_csv("digital_content_attention_data.csv")
+import os
 
 
 # ============================================================
@@ -25,6 +14,47 @@ st.set_page_config(
     page_icon="📊",
     layout="wide"
 )
+
+
+# ============================================================
+# FILE PATH
+# ============================================================
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def load_file(filename):
+    path = os.path.join(BASE_DIR, filename)
+
+    if not os.path.exists(path):
+        st.error(f"❌ Required file not found: {filename}")
+        st.info(
+            "Please make sure all model files are present "
+            "in the same GitHub repository folder as app.py."
+        )
+        st.stop()
+
+    return path
+
+
+# ============================================================
+# LOAD MODEL FILES
+# ============================================================
+
+MODEL_PATH = load_file("random_forest_model.pkl")
+COLUMNS_PATH = load_file("model_columns.pkl")
+KMEANS_PATH = load_file("kmeans_model.pkl")
+CLUSTER_SCALER_PATH = load_file("cluster_scaler.pkl")
+DATA_PATH = load_file("digital_content_attention_data.csv")
+
+
+model = joblib.load(MODEL_PATH)
+model_columns = joblib.load(COLUMNS_PATH)
+
+kmeans = joblib.load(KMEANS_PATH)
+cluster_scaler = joblib.load(CLUSTER_SCALER_PATH)
+
+df = pd.read_csv(DATA_PATH)
 
 
 # ============================================================
@@ -42,7 +72,7 @@ st.divider()
 
 
 # ============================================================
-# SIDEBAR
+# SIDEBAR INPUT
 # ============================================================
 
 st.sidebar.header("👤 User Behavior Input")
@@ -141,23 +171,27 @@ watch_percentage = (
 
 watch_percentage = min(watch_percentage, 100)
 
+
 average_session_time = (
     session_duration /
     max(login_frequency, 1)
 )
 
+
 engagement_score = (
-    (watch_percentage * 0.40) +
-    (quiz_score * 0.25) +
-    (notes_count * 5) +
-    (replay_count * 3) +
-    (login_frequency * 1)
+    (watch_percentage * 0.40)
+    + (quiz_score * 0.25)
+    + (notes_count * 5)
+    + (replay_count * 3)
+    + (login_frequency * 1)
 )
+
 
 replay_ratio = (
     replay_count /
     (watch_time + 1)
 )
+
 
 quiz_performance = (
     quiz_score /
@@ -166,33 +200,52 @@ quiz_performance = (
 
 
 # ============================================================
-# CREATE INPUT DATA
+# CREATE INPUT DATAFRAME
 # ============================================================
 
 input_df = pd.DataFrame([{
+
     "Content_Type": content_type,
+
     "Content_Duration": content_duration,
+
     "Watch_Time": watch_time,
+
     "Pause_Count": pause_count,
+
     "Replay_Count": replay_count,
+
     "Notes_Count": notes_count,
+
     "Quiz_Attempts": quiz_attempts,
+
     "Quiz_Score": quiz_score,
+
     "Login_Frequency": login_frequency,
+
     "Session_Duration": session_duration,
+
     "Previous_Content_Completion": previous_completion,
+
     "Device_Type": device_type,
+
     "Time_of_Day": time_of_day,
+
     "Watch_Percentage": watch_percentage,
+
     "Average_Session_Time": average_session_time,
+
     "Engagement_Score": engagement_score,
+
     "Replay_Ratio": replay_ratio,
+
     "Quiz_Performance": quiz_performance
+
 }])
 
 
 # ============================================================
-# ENCODING
+# ENCODE CATEGORICAL VARIABLES
 # ============================================================
 
 categorical_columns = [
@@ -202,11 +255,15 @@ categorical_columns = [
     "Time_of_Day"
 ]
 
+
 input_encoded = pd.get_dummies(
     input_df,
     columns=categorical_columns,
     drop_first=True
 )
+
+
+# Make sure feature columns match training columns
 
 input_encoded = input_encoded.reindex(
     columns=model_columns,
@@ -215,16 +272,15 @@ input_encoded = input_encoded.reindex(
 
 
 # ============================================================
-# PREDICTION
+# MACHINE LEARNING PREDICTION
 # ============================================================
 
 prediction = model.predict(input_encoded)[0]
 
-probabilities = model.predict_proba(
-    input_encoded
-)[0]
+probabilities = model.predict_proba(input_encoded)[0]
 
 completion_probability = probabilities[1] * 100
+
 
 completion_status = (
     "COMPLETED"
@@ -238,38 +294,51 @@ completion_status = (
 # ============================================================
 
 if engagement_score >= 70:
+
     engagement_level = "HIGH"
+
 elif engagement_score >= 45:
+
     engagement_level = "MEDIUM"
+
 else:
+
     engagement_level = "LOW"
 
 
 # ============================================================
-# DASHBOARD METRICS
+# TOP METRICS
 # ============================================================
 
 col1, col2, col3, col4 = st.columns(4)
 
+
 with col1:
+
     st.metric(
         "Watch Percentage",
         f"{watch_percentage:.1f}%"
     )
 
+
 with col2:
+
     st.metric(
         "Quiz Score",
         f"{quiz_score:.1f}"
     )
 
+
 with col3:
+
     st.metric(
         "Engagement Score",
         f"{engagement_score:.1f}"
     )
 
+
 with col4:
+
     st.metric(
         "Completion Probability",
         f"{completion_probability:.1f}%"
@@ -280,23 +349,29 @@ st.divider()
 
 
 # ============================================================
-# PREDICTION RESULT
+# COMPLETION PREDICTION
 # ============================================================
 
 st.subheader("🤖 Completion Prediction")
 
+
 if prediction == 1:
+
     st.success(
-        f"✅ {completion_status}"
-    )
-else:
-    st.warning(
-        f"⚠️ {completion_status}"
+        f"✅ Content is predicted to be {completion_status}"
     )
 
+else:
+
+    st.warning(
+        f"⚠️ Content is predicted to be {completion_status}"
+    )
+
+
 st.progress(
-    int(completion_probability)
+    int(min(max(completion_probability, 0), 100))
 )
+
 
 st.write(
     f"**Completion Probability:** "
@@ -315,11 +390,13 @@ st.write(
 
 st.subheader("📈 User Behavior Analysis")
 
+
 behavior_col1, behavior_col2 = st.columns(2)
+
 
 with behavior_col1:
 
-    st.write("### Learning Behavior")
+    st.write("### 📚 Learning Behavior")
 
     st.write(
         f"⏱️ Watch Time: **{watch_time} minutes**"
@@ -340,7 +417,7 @@ with behavior_col1:
 
 with behavior_col2:
 
-    st.write("### Learning Performance")
+    st.write("### 🎯 Learning Performance")
 
     st.write(
         f"📝 Quiz Score: **{quiz_score}%**"
@@ -359,27 +436,34 @@ with behavior_col2:
     )
 
 
+st.divider()
+
+
 # ============================================================
 # DATASET OVERVIEW
 # ============================================================
 
-st.divider()
-
 st.subheader("📊 Dataset Overview")
+
 
 dataset_col1, dataset_col2, dataset_col3 = st.columns(3)
 
+
 with dataset_col1:
+
     st.metric(
         "Total Users",
         df["User_ID"].nunique()
     )
 
+
 with dataset_col2:
+
     completion_rate = (
         df["Completion_Status"]
         .eq("Completed")
-        .mean() * 100
+        .mean()
+        * 100
     )
 
     st.metric(
@@ -387,7 +471,9 @@ with dataset_col2:
         f"{completion_rate:.1f}%"
     )
 
+
 with dataset_col3:
+
     st.metric(
         "Average Quiz Score",
         f"{df['Quiz_Score'].mean():.1f}"
@@ -402,6 +488,7 @@ st.divider()
 
 st.subheader("👥 User Segmentation")
 
+
 cluster_features = [
     "Watch_Percentage",
     "Replay_Count",
@@ -410,40 +497,61 @@ cluster_features = [
     "Session_Duration"
 ]
 
-cluster_input = input_df[cluster_features]
+
+cluster_input = input_df[
+    cluster_features
+]
+
 
 cluster_input_scaled = cluster_scaler.transform(
     cluster_input
 )
 
+
 cluster = kmeans.predict(
     cluster_input_scaled
 )[0]
 
-cluster_means = df.groupby("Cluster")[
-    cluster_features
-].mean()
 
-cluster_score = (
-    cluster_means["Watch_Percentage"] * 0.40 +
-    cluster_means["Quiz_Score"] * 0.25 +
-    cluster_means["Login_Frequency"] * 2 +
-    cluster_means["Session_Duration"] * 0.10 +
-    cluster_means["Replay_Count"] * 2
-)
+# ============================================================
+# CLUSTER NAMING
+# ============================================================
 
-sorted_clusters = cluster_score.sort_values().index
+if "Cluster" in df.columns:
 
-segment_names = {
-    sorted_clusters[0]: "Passive Users",
-    sorted_clusters[1]: "Regular Learners",
-    sorted_clusters[2]: "Highly Engaged Learners"
-}
+    cluster_means = df.groupby(
+        "Cluster"
+    )[cluster_features].mean()
 
-segment = segment_names.get(
-    cluster,
-    "Regular Learners"
-)
+    cluster_score = (
+        cluster_means["Watch_Percentage"] * 0.40
+        + cluster_means["Quiz_Score"] * 0.25
+        + cluster_means["Login_Frequency"] * 2
+        + cluster_means["Session_Duration"] * 0.10
+        + cluster_means["Replay_Count"] * 2
+    )
+
+    sorted_clusters = (
+        cluster_score
+        .sort_values()
+        .index
+    )
+
+    segment_names = {
+        sorted_clusters[0]: "Passive Users",
+        sorted_clusters[1]: "Regular Learners",
+        sorted_clusters[2]: "Highly Engaged Learners"
+    }
+
+    segment = segment_names.get(
+        cluster,
+        "Regular Learners"
+    )
+
+else:
+
+    segment = "Regular Learners"
+
 
 st.info(
     f"👤 Predicted User Segment: **{segment}**"
@@ -458,31 +566,48 @@ st.divider()
 
 st.subheader("📊 Dataset Visualizations")
 
+
 chart_col1, chart_col2 = st.columns(2)
 
+
 with chart_col1:
+
+    st.write("### Completion Status")
 
     completion_data = (
         df["Completion_Status"]
         .value_counts()
     )
 
-    st.bar_chart(completion_data)
+    st.bar_chart(
+        completion_data
+    )
 
 
 with chart_col2:
 
-    segment_data = (
-        df["User_Segment"]
-        .value_counts()
-    )
+    st.write("### User Segments")
 
-    st.bar_chart(segment_data)
+    if "User_Segment" in df.columns:
 
+        segment_data = (
+            df["User_Segment"]
+            .value_counts()
+        )
+
+        st.bar_chart(
+            segment_data
+        )
+
+
+# ============================================================
+# SAMPLE DATA
+# ============================================================
 
 st.divider()
 
 st.subheader("📋 Sample Dataset")
+
 
 st.dataframe(
     df.head(20),
@@ -490,9 +615,14 @@ st.dataframe(
 )
 
 
+# ============================================================
+# FOOTER
+# ============================================================
+
 st.divider()
 
 st.caption(
     "Digital Content Attention Analyzer | "
-    "Python + Pandas + NumPy + SQL + ML + K-Means + Streamlit"
+    "Python + Pandas + NumPy + SQL + "
+    "Random Forest + K-Means + Streamlit"
 )
